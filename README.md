@@ -1,38 +1,41 @@
-# Bangla RAG QA
+# BanglaRAG-Hybrid
 
-বাংলা উইকিপিডিয়ার উপর ভিত্তি করে একটি retrieval-augmented প্রশ্নোত্তর সিস্টেম।
-Dense ও sparse retrieval একসাথে চালিয়ে, cross-encoder দিয়ে পুনরায় সাজিয়ে,
-স্থানীয়ভাবে চালানো একটি instruction-tuned LLM দিয়ে উত্তর তৈরি করে।
+*[বাংলা সংস্করণ](README.bn.md)*
 
-## পদ্ধতি
+A retrieval-augmented question answering system over Bengali Wikipedia.
+It runs dense and sparse retrieval together, fuses and reranks the results with a
+multilingual cross-encoder, and generates answers with a locally served
+instruction-tuned LLM.
+
+## Approach
 
 ```
 Knowledge_Base.txt
       │
       ▼
- পরিষ্কারকরণ ──► বাক্যভিত্তিক chunking ──► আবর্জনা ছাঁকনি
+  cleaning ──► sentence-aware chunking ──► garbage filter
       │
-      ├──► E5 embedding ──► FAISS         ┐
-      │                                    ├──► RRF fusion ──► cross-encoder rerank ──► শীর্ষ ৪
-      └──► BM25 (+ শিরোনাম boost)         ┘                                             │
+      ├──► E5 embeddings ──► FAISS        ┐
+      │                                    ├──► RRF fusion ──► cross-encoder rerank ──► top 4
+      └──► BM25 (+ title boost)           ┘                                             │
                                                                                          ▼
-                                                          prompt ──► Ollama LLM ──► পরিষ্কার উত্তর
+                                                          prompt ──► Ollama LLM ──► cleaned answer
 ```
 
-| ধাপ | যা ব্যবহার করা হয়েছে |
+| Stage | Component |
 |---|---|
 | Embedding | `intfloat/multilingual-e5-base` |
 | Dense index | FAISS (normalized, cosine) |
-| Sparse index | BM25Okapi, বাংলা-সচেতন tokenizer |
+| Sparse index | BM25Okapi with a Bengali-aware tokenizer |
 | Fusion | Reciprocal Rank Fusion (k=60) |
 | Reranker | `BAAI/bge-reranker-v2-m3` |
-| Generator | `qwen2.5:7b`, ব্যর্থ হলে `llama3.1:8b` |
+| Generator | `qwen2.5:7b`, falling back to `llama3.1:8b` |
 
-## সেটআপ
+## Setup
 
 ```bash
-git clone https://github.com/<username>/bangla-rag-qa.git
-cd bangla-rag-qa
+git clone https://github.com/<username>/BanglaRAG-Hybrid.git
+cd BanglaRAG-Hybrid
 
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
@@ -40,31 +43,31 @@ pip install -r requirements.txt
 bash setup_ollama.sh
 ```
 
-ডেটা `data/` ফোল্ডারে রাখুন (এটি git-ignored):
+Place the dataset in `data/` (this directory is git-ignored):
 
 ```
 data/
-├── Knowledge_Base.txt    # বাংলা উইকিপিডিয়া ডাম্প
-├── train.csv             # কলাম: index, question, answer
-└── test.csv              # কলাম: index, question
+├── Knowledge_Base.txt    # Bengali Wikipedia dump
+├── train.csv             # columns: index, question, answer
+└── test.csv              # columns: index, question
 ```
 
-`data/` অন্য জায়গায় থাকলে `config.yaml` এর `paths.data_dir` বদলে দিন।
+If your data lives elsewhere, change `paths.data_dir` in `config.yaml`.
 
-## ব্যবহার
+## Usage
 
 ```bash
-# ১. chunk ও FAISS ইনডেক্স তৈরি (একবারই)
+# 1. Build chunks and the FAISS index (run once)
 python build_index.py --rebuild
 
-# ২. train set এ token F1 মাপা
+# 2. Measure token F1 on the training split
 python run_inference.py --eval --limit 100
 
-# ৩. submission.csv তৈরি
+# 3. Produce submission.csv
 python run_inference.py
 ```
 
-কোড থেকে সরাসরি:
+From code:
 
 ```python
 from banglarag.pipeline import RAGPipeline
@@ -73,37 +76,40 @@ pipeline = RAGPipeline()
 print(pipeline.answer("বাংলাদেশের স্বাধীনতা যুদ্ধ কবে শুরু হয়?"))
 ```
 
-## কনফিগারেশন
+## Configuration
 
-সব সেটিং [`config.yaml`](config.yaml) এ — chunk size, top-k, মডেলের নাম,
-RRF ধ্রুবক, decoding অপশন। কোডের কোথাও পাথ হার্ডকোড করা নেই।
+Every tunable lives in [`config.yaml`](config.yaml) — chunk size, top-k values,
+model names, the RRF constant, decoding options. No path is hardcoded anywhere
+in the source.
 
-## ফাইল কাঠামো
+## Repository layout
 
 ```
-config.yaml           সব সেটিং
-build_index.py        chunk + FAISS ইনডেক্স তৈরি
-run_inference.py      উত্তর তৈরি ও মূল্যায়ন
-setup_ollama.sh       Ollama ইনস্টল ও মডেল নামানো
+config.yaml           all settings
+build_index.py        builds chunks and the FAISS index
+run_inference.py      generates answers and evaluates
+setup_ollama.sh       installs Ollama and pulls the models
 banglarag/
-├── config.py         config.yaml লোডার
-├── preprocess.py     পরিষ্কারকরণ, chunking, আবর্জনা ছাঁকনি
+├── config.py         config.yaml loader
+├── preprocess.py     cleaning, chunking, garbage filtering
 ├── retrieval.py      BM25, FAISS, reranker, hybrid search
-├── generate.py       prompt, Ollama ক্লায়েন্ট, উত্তর পরিষ্কার
-└── pipeline.py       সব একসাথে জোড়া
-notebook/             মূল exploratory notebook (রেফারেন্স)
+├── generate.py       prompts, Ollama client, answer cleanup
+└── pipeline.py       ties everything together
+notebook/             original exploratory notebook, kept for reference
 ```
 
-## নকশাগত সিদ্ধান্ত
+## Design decisions
 
-- **E5 এর asymmetric প্রিফিক্স।** index করার সময় `passage:`, খোঁজার সময় `query:`।
-  পরিষ্কার লেখা `metadata["raw_text"]` এ আলাদা রাখা হয়, তাই BM25, reranker ও prompt
-  কখনো ওই প্রিফিক্স দেখে না।
-- **Reranker অবশ্যই multilingual।** ইংরেজি-only `bge-reranker-base` বাংলায় স্পষ্টভাবে খারাপ করে।
-- **শিরোনাম boost আগে থেকে index করা।** না হলে প্রতি প্রশ্নে ৩৮ হাজার ডকুমেন্ট স্ক্যান করতে হতো।
-- **উত্তর কড়াভাবে পরিষ্কার করা।** স্কোরিং token F1 ভিত্তিক, তাই markdown, reasoning trace
-  বা বাড়তি বিরামচিহ্ন সরাসরি নম্বর কাটে।
+- **E5 requires asymmetric prefixes.** `passage:` at index time, `query:` at search
+  time. The clean text is stored separately in `metadata["raw_text"]`, so BM25, the
+  reranker and the prompt never see the prefix.
+- **The reranker must be multilingual.** The English-only `bge-reranker-base`
+  degrades noticeably on Bengali.
+- **Title boosting is precomputed.** Otherwise every query would scan the titles of
+  all 38k chunks.
+- **Answers are cleaned aggressively.** Scoring is token-F1 based, so markdown,
+  reasoning traces and stray punctuation cost precision directly.
 
-## লাইসেন্স
+## License
 
 MIT
