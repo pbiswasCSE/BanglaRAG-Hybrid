@@ -1,0 +1,29 @@
+# ---------- ডেটা (কখনো commit করবেন না) ----------
+data/
+Knowledge_Base.txt
+*.csv
+submission*.csv
+
+# ---------- জেনারেট হওয়া ফাইল ----------
+faiss_index/
+chunks.jsonl
+*.faiss
+*.pkl
+
+# ---------- সিক্রেট (ভবিষ্যতে key যোগ করলে সুরক্ষা) ----------
+.env
+*.key
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# ---------- লগ / OS ----------
+*.log
+nohup.out
+.DS_Store
+.vscode/
+.idea/

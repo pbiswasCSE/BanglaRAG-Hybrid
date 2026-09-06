@@ -1,0 +1,51 @@
+# ==========================================================
+# সব সেটিং এই একটা ফাইলে। কোডের কোথাও পাথ হার্ডকোড করা নেই।
+# ==========================================================
+
+paths:
+  data_dir: "./data"                       # Colab: /content/drive/MyDrive/Bangla_RAG
+  knowledge_base: "Knowledge_Base.txt"     # data_dir এর ভেতরে
+  train: "train.csv"
+  test: "test.csv"
+  chunks: "chunks.jsonl"                   # স্ক্রিপ্ট নিজে বানাবে
+  faiss_index: "faiss_index"               # স্ক্রিপ্ট নিজে বানাবে
+  submission: "submission.csv"
+
+chunking:
+  chunk_size: 800          # অক্ষরে, বাক্য ভেঙে নয়
+  overlap_sentences: 1
+  min_chunk_chars: 30
+  min_article_chars: 200
+  min_cleaned_chars: 80
+
+embedding:
+  model_name: "intfloat/multilingual-e5-base"
+  device: "cuda"           # GPU না থাকলে "cpu"
+  normalize: true
+  query_prefix: "query: "      # E5 এর জন্য বাধ্যতামূলক
+  passage_prefix: "passage: "
+
+retrieval:
+  faiss_top_k: 30
+  bm25_top_k: 30
+  rerank_top_k: 20
+  final_top_k: 4
+  title_boost: 3.0
+  rrf_k: 60
+
+reranker:
+  model_name: "BAAI/bge-reranker-v2-m3"    # multilingual — বাংলার জন্য জরুরি
+  device: "cuda"
+  max_length: 1024
+  batch_size: 16
+
+generation:
+  ollama_url: "http://127.0.0.1:11434/api/chat"
+  model_chain:
+    - "qwen2.5:7b"
+    - "llama3.1:8b"        # প্রথমটা ব্যর্থ হলে এটা
+  temperature: 0
+  num_predict: 120
+  timeout_seconds: 180
+  max_retries: 3
+  fallback_answer: "জানা নেই"
